@@ -1,0 +1,28 @@
+{
+	"schemaVersion": 1,
+	"id": "schemplacer",
+	"version": "${version}",
+	"name": "Schematic Placer",
+	"description": "An addon for WorldEdit that streamlines placing schematics in Minecraft.",
+	"authors": [
+		"FaceTorched"
+	],
+	"contact": {
+		"homepage": "https://modrinth.com/mod/schemplacer",
+		"sources": "https://github.com/facetorched/schemplacer"
+	},
+	"license": "MIT",
+	"icon": "assets/schemplacer/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.facetorched.schemplacer.SchemPlacerMod"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.16.14",
+		"minecraft": "~1.21.7",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

@@ -18,10 +18,8 @@ import com.sk89q.worldedit.fabric.FabricAdapter;
 import com.sk89q.worldedit.fabric.FabricFakePlayer;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.util.io.file.FilenameException;
-import com.sk89q.worldedit.world.World;
 
 import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 
 public class SchematicService {
@@ -32,15 +30,7 @@ public class SchematicService {
     		if (CommandBlockUtil.isCommandBlockSource(source)) {
             	CommandBlockUtil.setCommandBlockSuccess(source, 0);
             }
-        	ServerWorld mcWorld = source.getWorld();
-            World weWorld = FabricAdapter.adapt(mcWorld);
-            CompletableFuture<Clipboard> clipboard = loadClipboardSafe(source, filename);
-            if (clipboard == null) {
-                source.sendError(Text.literal("Unable to load schematic: " + filename));
-                return 0;
-            }
-            SchematicBatchTask.Mode mode = remove ? SchematicBatchTask.Mode.REMOVE : SchematicBatchTask.Mode.PLACE;
-            SchematicBatchTask task = new SchematicBatchTask(weWorld, clipboard, pastePos, mode, ignoreAir, source);
+            SchematicBatchTask task = new SchematicBatchTask(source, filename, pastePos, remove, ignoreAir);
             boolean queueSuccess = SchemPlacerMod.enqueue(task);
             if (!queueSuccess) {
 				source.sendFeedback(() -> Text.literal("Already " + (remove ? "removing " : "placing ") + filename), true);

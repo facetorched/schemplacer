@@ -18,7 +18,7 @@ public class PlaceSchemCommand {
                 .then(CommandManager.argument("pos", BlockPosArgumentType.blockPos())
                     .executes(ctx -> {
                         String filename = StringArgumentType.getString(ctx, "filename");
-                        BlockPos pos = BlockPosArgumentType.getLoadedBlockPos(ctx, "pos");
+                        BlockPos pos = BlockPosArgumentType.getBlockPos(ctx, "pos");
                         return SchematicService.enqueue(ctx.getSource(), filename, BlockVector3.at(pos.getX(), pos.getY(), pos.getZ()), false, true);
                     })
                 ).executes(ctx -> {

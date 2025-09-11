@@ -7,12 +7,15 @@ import com.facetorched.schemplacer.util.CommandBlockUtil;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
+import com.sk89q.worldedit.fabric.FabricAdapter;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.world.World;
 import com.sk89q.worldedit.world.block.BlockTypes;
 
+import net.minecraft.block.entity.CommandBlockBlockEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 
 /**
@@ -23,14 +26,16 @@ import net.minecraft.text.Text;
  * For REMOVE: sets air where the schematic has non-air blocks.
  */
 public class SchematicBatchTask {
-    public enum Mode { PLACE, REMOVE }
-
+	private final ServerCommandSource source;
+    private final String filename;
+    
+    private final BlockVector3 pastePos;
+    private final boolean remove;
+    private final boolean ignoreAir;
+    
     private final World weWorld;
     private final CompletableFuture<Clipboard> clipboardFuture;
-    private final BlockVector3 pastePos;
-    private final Mode mode;
-    private final boolean ignoreAir;
-    private final ServerCommandSource notifySource;
+    
     private Clipboard clipboard;
 
     private BlockVector3 min;
@@ -41,18 +46,23 @@ public class SchematicBatchTask {
     private boolean done = false;
 
     public SchematicBatchTask(
-	    World weWorld,
-	    CompletableFuture<Clipboard> clipboardFuture,
+    	ServerCommandSource notifySource,
+    	String filename,
 	    BlockVector3 pastePos,
-	    Mode mode,
-	    boolean ignoreAir,
-	    ServerCommandSource notifySource) {
-	    this.weWorld = weWorld;
-	    this.clipboardFuture = clipboardFuture;
+	    boolean remove,
+	    boolean ignoreAir) {
+    	this.filename = filename;
 	    this.pastePos = pastePos;
-	    this.mode = mode;
+	    this.remove = remove;
 	    this.ignoreAir = ignoreAir;
-	    this.notifySource = notifySource;
+	    this.source = notifySource;
+	    ServerWorld mcWorld = notifySource.getWorld();
+        this.weWorld = FabricAdapter.adapt(mcWorld);
+        try {
+        	this.clipboardFuture = SchematicService.loadClipboardSafe(notifySource, filename);
+        } catch (Exception e) {
+        	throw new RuntimeException("Error loading schematic: " + e.getMessage(), e);
+        }
     }
     
     private void initClipboard() {
@@ -67,16 +77,16 @@ public class SchematicBatchTask {
 
     public int tick(int batchSize) {
         if (done) return batchSize;
-        if (CommandBlockUtil.isCommandBlockSource(notifySource)) {
-			CommandBlockUtil.setCommandBlockSuccess(notifySource, 0); // for some reason we have to do this every tick
+        if (CommandBlockUtil.isCommandBlockSource(source)) {
+			CommandBlockUtil.setCommandBlockSuccess(source, 0); // for some reason we have to do this every tick
 		}
         if (!clipboardFuture.isDone()) return batchSize; // not loaded yet
         if (clipboard == null) {
 	        try {
 		        initClipboard();
 			} catch (Exception e) {
-				if (notifySource != null)
-					notifySource.sendError(Text.literal("Error loading schematic: " + e.getMessage()));
+				if (source != null)
+					source.sendError(Text.literal("Error loading schematic: " + e.getMessage()));
 				done = true;
 				return batchSize;
 			}
@@ -90,7 +100,7 @@ public class SchematicBatchTask {
                 BlockVector3 worldPos = pastePos.add(c.subtract(origin));
                 
                 try {
-	                if (mode == Mode.REMOVE) {
+	                if (remove) {
 	                    if (!isAir) {
 	                        edit.setBlock(worldPos, BlockTypes.AIR.getDefaultState());
 	                        processed++;
@@ -104,8 +114,8 @@ public class SchematicBatchTask {
 	                    }
 	                }
 	            } catch (Exception e) {
-	            	if (notifySource != null)
-	            		notifySource.sendError(Text.literal("Error setting block at " + worldPos + ": " + e.getMessage()));
+	            	if (source != null)
+	            		source.sendError(Text.literal("Error setting block at " + worldPos + ": " + e.getMessage()));
 	            }
                 advance();
             }
@@ -130,40 +140,46 @@ public class SchematicBatchTask {
     }
 
     public boolean isDone() { return done; }
-    
-    public void sendMessage(String message) {
-    	ServerPlayerEntity player = notifySource.getPlayer();
-		if (player != null) {
-			player.sendMessage(Text.literal(message), false);
-		} else if (notifySource != null) {
-			notifySource.sendFeedback(() -> Text.literal(message), false);
-		}
-	}
 
     private void reportSuccess() {
-        if (notifySource == null) return;
-        if (CommandBlockUtil.isCommandBlockSource(notifySource)) {
-            CommandBlockUtil.setCommandBlockSuccess(notifySource, 1);
+        if (source == null) return;
+        if (CommandBlockUtil.isCommandBlockSource(source)) {
+            CommandBlockUtil.setCommandBlockSuccess(source, 1);
         }
+        source.sendFeedback(() -> Text.literal((remove ? "Removed " : "Placed ") + filename), true);
     }
     
     @Override
     public int hashCode() {
-		return Objects.hash(weWorld, pastePos, mode, ignoreAir, notifySource);
-	}
-    
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj)
-			return true;
-		if (obj == null)
-			return false;
-		if (getClass() != obj.getClass())
-			return false;
-		SchematicBatchTask other = (SchematicBatchTask) obj;
-		return Objects.equals(weWorld, other.weWorld) && Objects.equals(pastePos, other.pastePos)
-				&& mode == other.mode && ignoreAir == other.ignoreAir
-				&& Objects.equals(notifySource, other.notifySource);
-	}
-    
+        // Build a stable identity for the source
+        Object sourceKey = getSourceKey();
+        return Objects.hash(weWorld, filename, pastePos, remove, ignoreAir, sourceKey);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (!(obj instanceof SchematicBatchTask other)) return false;
+        return Objects.equals(weWorld, other.weWorld)
+        	&& Objects.equals(filename, other.filename)
+            && Objects.equals(pastePos, other.pastePos)
+            && remove == other.remove
+            && ignoreAir == other.ignoreAir
+            && Objects.equals(getSourceKey(), other.getSourceKey());
+    }
+
+    /**
+     * Produce a stable identity key for the source.
+     */
+    private Object getSourceKey() {
+        CommandBlockBlockEntity cbbe = CommandBlockUtil.getCommandBlockEntityFromSource(source);
+        if (cbbe != null) {
+            return cbbe.getPos(); // BlockPos is stable & equals/hashCode safe
+        }
+        Entity entity = source.getEntity();
+        if (entity != null) {
+            return entity.getUuid(); // UUID is stable across ticks
+        }
+        return null;
+    }
 }

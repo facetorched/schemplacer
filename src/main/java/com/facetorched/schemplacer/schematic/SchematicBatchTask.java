@@ -9,6 +9,8 @@ import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.fabric.FabricAdapter;
 import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.util.SideEffect;
+import com.sk89q.worldedit.util.SideEffectSet;
 import com.sk89q.worldedit.world.World;
 import com.sk89q.worldedit.world.block.BlockTypes;
 
@@ -28,7 +30,6 @@ import net.minecraft.text.Text;
 public class SchematicBatchTask {
 	private final ServerCommandSource source;
     private final String filename;
-    
     private final BlockVector3 pastePos;
     private final boolean remove;
     private final boolean ignoreAir;
@@ -36,37 +37,41 @@ public class SchematicBatchTask {
     private final World weWorld;
     private final CompletableFuture<Clipboard> clipboardFuture;
     
+    private final ServerWorld mcWorld;
+    
     private Clipboard clipboard;
-
     private BlockVector3 min;
     private BlockVector3 max;
     private BlockVector3 origin;
-
     private int x, y, z;
     private boolean done = false;
 
     public SchematicBatchTask(
-    	ServerCommandSource notifySource,
+    	ServerCommandSource source,
     	String filename,
 	    BlockVector3 pastePos,
 	    boolean remove,
 	    boolean ignoreAir) {
+    	this.source = source;
     	this.filename = filename;
 	    this.pastePos = pastePos;
 	    this.remove = remove;
 	    this.ignoreAir = ignoreAir;
-	    this.source = notifySource;
-	    ServerWorld mcWorld = notifySource.getWorld();
+	    
+	    this.mcWorld = source.getWorld();
         this.weWorld = FabricAdapter.adapt(mcWorld);
-        try {
-        	this.clipboardFuture = SchematicService.loadClipboardSafe(notifySource, filename);
-        } catch (Exception e) {
-        	throw new RuntimeException("Error loading schematic: " + e.getMessage(), e);
-        }
+    	this.clipboardFuture = SchematicService.loadClipboardSafe(source, filename);
+    	this.clipboardFuture.whenComplete((cb, ex) -> {
+			if (ex != null) {
+				if (source != null)
+					source.sendError(Text.literal("Error loading schematic: " + ex.getMessage()));
+				done = true;
+			}
+		});
     }
     
     private void initClipboard() {
-    	clipboard = clipboardFuture.join();
+    	this.clipboard = clipboardFuture.join();
         this.min = clipboard.getRegion().getMinimumPoint();
         this.max = clipboard.getRegion().getMaximumPoint();
         this.origin = clipboard.getOrigin();
@@ -93,30 +98,33 @@ public class SchematicBatchTask {
 		}
         int processed = 0;
         try (EditSession edit = WorldEdit.getInstance().newEditSession(weWorld)) {
+        	edit.setSideEffectApplier(SideEffectSet.defaults()
+        			.with(SideEffect.LIGHTING, SideEffect.State.DELAYED)
+        			.with(SideEffect.NEIGHBORS, SideEffect.State.OFF)
+        			.with(SideEffect.UPDATE, SideEffect.State.OFF));
             while (!done && processed < batchSize) {
                 BlockVector3 c = BlockVector3.at(x, y, z);
                 var schemBlock = clipboard.getBlock(c);
                 boolean isAir = schemBlock.getBlockType().id().equals("minecraft:air");
                 BlockVector3 worldPos = pastePos.add(c.subtract(origin));
                 
-                try {
-	                if (remove) {
-	                    if (!isAir) {
-	                        edit.setBlock(worldPos, BlockTypes.AIR.getDefaultState());
-	                        processed++;
-	                    }
-	                } else { // PLACE
-	                    if (isAir && ignoreAir) {
-	                        // skip air if ignoring
-	                    } else {
+                if (!isAir || !ignoreAir) {
+                	try {
+		                if (remove) {
+		                    edit.setBlock(worldPos, BlockTypes.AIR.getDefaultState());
+		                } else { // PLACE
 	                        edit.setBlock(worldPos, schemBlock);
-	                        processed++;
-	                    }
+		                }
+                	} catch (Exception e) {
+    	            	if (source != null)
+    	            		source.sendError(Text.literal("Error setting block at " + worldPos + ": " + e.getMessage()));
+    	            }
+                    if (schemBlock.getBlockType().getMaterial().isSolid()) {
+                    	processed+=1;
+                    }else {
+                    	processed++;
 	                }
-	            } catch (Exception e) {
-	            	if (source != null)
-	            		source.sendError(Text.literal("Error setting block at " + worldPos + ": " + e.getMessage()));
-	            }
+                }
                 advance();
             }
         }

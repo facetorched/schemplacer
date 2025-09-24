@@ -4,7 +4,6 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import com.facetorched.schemplacer.SchemPlacerMod;
-import com.facetorched.schemplacer.util.CommandSourceUtil;
 import com.facetorched.schemplacer.util.FrameNumberIterator;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.fabric.FabricAdapter;
@@ -195,7 +194,7 @@ public class SchematicAnimationTask implements ISchematicTask {
     
     @Override
     public int hashCode() {
-        return Objects.hash(weWorld, filenamePattern, pastePos, ticksPerFrame, frameIter, clearPrevFrame, removeWhenDone, ignoreAir, CommandSourceUtil.getSourceKey(source));
+        return Objects.hash(weWorld, filenamePattern, pastePos, ticksPerFrame, frameIter, clearPrevFrame, removeWhenDone, ignoreAir);
     }
 
     @Override
@@ -209,7 +208,6 @@ public class SchematicAnimationTask implements ISchematicTask {
             && Objects.equals(frameIter, other.frameIter)
             && clearPrevFrame == other.clearPrevFrame
             && removeWhenDone == other.removeWhenDone
-            && ignoreAir == other.ignoreAir
-            && Objects.equals(CommandSourceUtil.getSourceKey(source), CommandSourceUtil.getSourceKey(other.source));
+            && ignoreAir == other.ignoreAir;
     }
 }

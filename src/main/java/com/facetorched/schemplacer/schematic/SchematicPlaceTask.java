@@ -5,7 +5,6 @@ import java.util.concurrent.CompletableFuture;
 
 import com.facetorched.schemplacer.SchemPlacerMod;
 import com.facetorched.schemplacer.util.CommandBlockUtil;
-import com.facetorched.schemplacer.util.CommandSourceUtil;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
@@ -205,7 +204,7 @@ public class SchematicPlaceTask implements ISchematicTask {
     
     @Override
     public int hashCode() {
-        return Objects.hash(weWorld, filename, pastePos, remove, ignoreAir, CommandSourceUtil.getSourceKey(source));
+        return Objects.hash(weWorld, filename, pastePos, remove, ignoreAir);
     }
 
     @Override
@@ -216,7 +215,6 @@ public class SchematicPlaceTask implements ISchematicTask {
         	&& Objects.equals(filename, other.filename)
             && Objects.equals(pastePos, other.pastePos)
             && remove == other.remove
-            && ignoreAir == other.ignoreAir
-            && Objects.equals(CommandSourceUtil.getSourceKey(source), CommandSourceUtil.getSourceKey(other.source));
+            && ignoreAir == other.ignoreAir;
     }
 }

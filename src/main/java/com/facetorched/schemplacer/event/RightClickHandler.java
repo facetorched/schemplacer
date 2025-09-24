@@ -5,6 +5,7 @@ import java.util.Locale;
 import com.facetorched.schemplacer.command.SchemAnimateCommand;
 import com.facetorched.schemplacer.command.SchemPlaceCommand;
 import com.facetorched.schemplacer.command.SchemRemoveCommand;
+import com.facetorched.schemplacer.command.SchemStopAnimateCommand;
 import com.facetorched.schemplacer.schematic.SchematicTaskScheduler;
 import com.sk89q.worldedit.math.BlockVector3;
 
@@ -35,7 +36,9 @@ public class RightClickHandler {
             } else if (cmd.equals(SchemRemoveCommand.COMMAND_NAME)) {
     			res = parseAndEnqueuePlace(sp, true, toks);
             } else if (cmd.equals(SchemAnimateCommand.COMMAND_NAME)) {
-            	res = parseAndEnqueueAnimation(sp, toks);
+            	res = parseAndEnqueueAnimation(sp, false, toks);
+            } else if (cmd.equals(SchemStopAnimateCommand.COMMAND_NAME)) {
+            	res = parseAndEnqueueAnimation(sp, true, toks);
     		} else {
     			return ActionResult.PASS;
     		}
@@ -58,7 +61,7 @@ public class RightClickHandler {
         return SchematicTaskScheduler.enqueuePlace(sp.getCommandSource(), filename, pos, ignoreAir, remove);
 	}
 	
-    private static int parseAndEnqueueAnimation(ServerPlayerEntity sp, String[] toks) {
+    private static int parseAndEnqueueAnimation(ServerPlayerEntity sp, boolean stop, String[] toks) {
 		String filenamePattern = getFilenameArg(toks, 1);
 		if (filenamePattern == null) return 0;
 		BlockVector3 pos = getPastePositionArg(sp, toks, 2);
@@ -71,7 +74,7 @@ public class RightClickHandler {
 		Boolean removeWhenDone = getBooleanArg(toks, 10);
 		Boolean clearPrevFrame = getBooleanArg(toks, 11);
 		Boolean ignoreAir = getBooleanArg(toks, 12);
-		boolean stop = sp.isSneaking();
+		if (sp.isSneaking()) stop = !stop;
 		return SchematicTaskScheduler.enqueueAnimation(sp.getCommandSource(), filenamePattern, pos,
 				ticksPerFrame, start, end, step, loop,
 				removeWhenDone, clearPrevFrame, ignoreAir, stop);

@@ -19,12 +19,12 @@ import net.fabricmc.loader.api.FabricLoader;
 public class ModConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    // === Defaults ===
+    // Defaults
     public int batchSize = 10_000;
-    public boolean cacheSchematics = false;
+    public boolean cacheSchematics = true;
     public String schematicDir = "config/worldedit/schematics";
+    public boolean commandOutput = true;
 
-    // === File ===
     private static final String FILE_NAME = SchemPlacerMod.MOD_ID + ".json";
 
     public static ModConfig loadOrCreate() {
@@ -58,6 +58,9 @@ public class ModConfig {
         if (json.has("schematicDir")) {
             cfg.schematicDir = json.get("schematicDir").getAsString();
         }
+        if (json.has("commandOutput")) {
+			cfg.commandOutput = json.get("commandOutput").getAsBoolean();
+		}
     }
     
     private void save(File file) {

@@ -1,18 +1,19 @@
 package com.facetorched.schemplacer;
 
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.facetorched.schemplacer.command.PlaceSchemCommand;
-import com.facetorched.schemplacer.command.RemoveSchemCommand;
+import com.facetorched.schemplacer.command.SchemPlaceCommand;
+import com.facetorched.schemplacer.command.SchemRemoveCommand;
+import com.facetorched.schemplacer.command.SchemStopAnimateCommand;
+import com.facetorched.schemplacer.command.SchemAnimateCommand;
 import com.facetorched.schemplacer.command.SchemItemCommand;
 import com.facetorched.schemplacer.event.RightClickHandler;
-import com.facetorched.schemplacer.schematic.SchematicBatchTask;
+import com.facetorched.schemplacer.schematic.ISchematicTask;
 import com.facetorched.schemplacer.schematic.SchematicCacheLoader;
 import com.facetorched.schemplacer.util.ModConfig;
 import com.sk89q.worldedit.WorldEdit;
@@ -27,16 +28,18 @@ public class SchemPlacerMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public static ModConfig CONFIG;
-    private static final Set<SchematicBatchTask> TASK_QUEUE = new HashSet<>();
+    private static final LinkedHashSet<ISchematicTask> TASK_QUEUE = new LinkedHashSet<>();
 
     @Override
     public void onInitialize() {
         // Load config
     	CONFIG = ModConfig.loadOrCreate();
         // Register commands
-        CommandRegistrationCallback.EVENT.register(PlaceSchemCommand::register);
-        CommandRegistrationCallback.EVENT.register(RemoveSchemCommand::register);
+        CommandRegistrationCallback.EVENT.register(SchemPlaceCommand::register);
+        CommandRegistrationCallback.EVENT.register(SchemRemoveCommand::register);
         CommandRegistrationCallback.EVENT.register(SchemItemCommand::register);
+        CommandRegistrationCallback.EVENT.register(SchemAnimateCommand::register);
+        CommandRegistrationCallback.EVENT.register(SchemStopAnimateCommand::register);
         // Register right-click handler
         RightClickHandler.register();
         // Tick runner
@@ -47,8 +50,14 @@ public class SchemPlacerMod implements ModInitializer {
 		}
         LOGGER.info("Schematic Placer initialized.");
     }
+    
+    public static boolean isTaskQueued(ISchematicTask task) {
+		synchronized (TASK_QUEUE) {
+			return TASK_QUEUE.contains(task);
+		}
+	}
 
-    public static boolean enqueue(SchematicBatchTask task) {
+    public static boolean enqueue(ISchematicTask task) {
         synchronized (TASK_QUEUE) {
             return TASK_QUEUE.add(task);
         }
@@ -56,13 +65,13 @@ public class SchemPlacerMod implements ModInitializer {
 
     private void onServerTick(MinecraftServer server) {
         if (TASK_QUEUE.isEmpty()) return;
-        Iterator<SchematicBatchTask> it;
+        Iterator<ISchematicTask> it;
         synchronized (TASK_QUEUE) {
             it = new LinkedList<>(TASK_QUEUE).iterator();
         }
         int batchSize = CONFIG.batchSize;
         while (it.hasNext()) {
-            SchematicBatchTask task = it.next();
+        	ISchematicTask task = it.next();
             batchSize = task.tick(batchSize);
             if (task.isDone()) {
                 synchronized (TASK_QUEUE) {
@@ -72,5 +81,12 @@ public class SchemPlacerMod implements ModInitializer {
         }
     }
     
-    
+    public static ISchematicTask findTask(ISchematicTask task) {
+		synchronized (TASK_QUEUE) {
+			for (ISchematicTask t : TASK_QUEUE) {
+				if (t.equals(task)) return t;
+			}
+		}
+		return null;
+	}
 }

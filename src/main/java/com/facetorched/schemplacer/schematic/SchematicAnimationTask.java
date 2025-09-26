@@ -29,8 +29,6 @@ public class SchematicAnimationTask implements ISchematicTask {
     private int ticksSinceLastFrame = 0;
     private SchematicPlaceTask currentTask = null;
     private SchematicPlaceTask nextTask = null;
-    private Clipboard currentFullClipboard = null;
-    private Clipboard nextFullClipboard = null;
     private boolean done = false;
     private boolean paused = false;
     private Integer frameNumber = null;
@@ -108,7 +106,6 @@ public class SchematicAnimationTask implements ISchematicTask {
 					return batchSize;
 				} else if (nextTask.clipboardLoaded() && ticksSinceLastFrame >= ticksPerFrame) {
 					currentTask = nextTask;
-					currentFullClipboard = nextFullClipboard;
 					if (frameNumber != null)
 						frameNumber = frameIter.next();
 					nextTask = initNextTask();
@@ -123,6 +120,7 @@ public class SchematicAnimationTask implements ISchematicTask {
     	boolean remove = false;
     	String filename;
     	CompletableFuture<Clipboard> clipboardFuture = null;
+    	CompletableFuture<Clipboard> removeClipboardFuture = null;
     	if (frameIter.hasNext()) {
     		filename = buildFilename(filenamePattern, frameIter.peek());
     	} else { // No more frames. Remove last frame if needed or end animation.
@@ -130,27 +128,17 @@ public class SchematicAnimationTask implements ISchematicTask {
                 filename = buildFilename(filenamePattern, frameNumber);
                 remove = true;
                 frameNumber = null; // ensure we only remove once
-                clipboardFuture = CompletableFuture.completedFuture(currentFullClipboard); // use full clipboard to remove
+                clipboardFuture = currentTask.getClipboardFuture(); // use current clipboard to remove
             }
             else {
 				return null;
 			}
     	}
-		if (clipboardFuture == null) { // not removing current frame
-			clipboardFuture = CompletableFuture.supplyAsync(() -> {
-				Clipboard newFullClipboard = SchematicService.loadClipboardSafe(source, filename).join();
-				if (currentFullClipboard == null) {
-					currentFullClipboard = newFullClipboard;
-					return newFullClipboard; // first frame, nothing to clear
-				}
-				//} else if (nextFullClipboard != null) {
-				//	currentFullClipboard = nextFullClipboard;
-				//}
-				nextFullClipboard = newFullClipboard;
-				if (clearPrevFrame)
-					return SchematicService.diffClipboard(source, currentFullClipboard, nextFullClipboard, ignoreAir);
-				return nextFullClipboard;
-			});
+		if (clipboardFuture == null) { // not removing when done
+			if (clearPrevFrame && currentTask != null) {
+				removeClipboardFuture = currentTask.getClipboardFuture();
+			}
+			clipboardFuture = SchematicService.loadClipboardSafe(source, filename);
 		}
         return new SchematicPlaceTask(
                 source,
@@ -159,7 +147,8 @@ public class SchematicAnimationTask implements ISchematicTask {
                 pastePos,
                 ignoreAir,
                 remove,
-                true // silent
+                true, // silent
+                removeClipboardFuture
         );
     }
     

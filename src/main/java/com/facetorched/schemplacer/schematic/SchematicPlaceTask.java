@@ -34,6 +34,7 @@ public class SchematicPlaceTask implements ISchematicTask {
     
     private final World weWorld;
     private final CompletableFuture<Clipboard> clipboardFuture;
+    private final CompletableFuture<Clipboard> removeClipboardFuture;
     
     private Clipboard clipboard;
     private BlockVector3 min;
@@ -50,7 +51,8 @@ public class SchematicPlaceTask implements ISchematicTask {
 	    BlockVector3 pastePos,
 	    Boolean ignoreAir,
 	    Boolean remove,
-	    boolean silent) {
+	    boolean silent,
+	    CompletableFuture<Clipboard> removeClipboardFuture) {
     	this.source = source;
     	this.filename = filename;
 	    this.pastePos = pastePos;
@@ -58,6 +60,7 @@ public class SchematicPlaceTask implements ISchematicTask {
 	    this.remove = remove == null ? false : remove;
 	    if (silent) this.commandOutput = false;
 	    else this.commandOutput = SchemPlacerMod.CONFIG.commandOutput && source != null;
+	    this.removeClipboardFuture = removeClipboardFuture;
 	    
         this.weWorld = FabricAdapter.adapt(source.getWorld());
     	this.clipboardFuture = clipboardFuture == null ? SchematicService.loadClipboardSafe(source, filename) : clipboardFuture;
@@ -80,7 +83,7 @@ public class SchematicPlaceTask implements ISchematicTask {
 	    BlockVector3 pastePos,
 	    Boolean ignoreAir,
 	    Boolean remove) {
-		this(source, filename, clipboardFuture, pastePos, ignoreAir, remove, false);
+		this(source, filename, clipboardFuture, pastePos, ignoreAir, remove, false, null);
 	}
     
     public SchematicPlaceTask(
@@ -122,6 +125,15 @@ public class SchematicPlaceTask implements ISchematicTask {
 		}
         if (!clipboardLoaded()) return batchSize; // not loaded yet
         int processed = 0;
+        Clipboard removeClipboard = null;
+        if (removeClipboardFuture != null) {
+			try {
+				removeClipboard = removeClipboardFuture.join();
+			} catch (Exception e) {
+				if (commandOutput)
+            		source.sendError(Text.literal("Error loading remove schematic: " + e.getMessage()));
+			}
+		}
         try (EditSession edit = WorldEdit.getInstance().newEditSession(weWorld)) {
         	edit.setSideEffectApplier(SideEffectSet.defaults()
         			.with(SideEffect.LIGHTING, SideEffect.State.DELAYED)
@@ -133,18 +145,29 @@ public class SchematicPlaceTask implements ISchematicTask {
                 boolean isAir = schemBlock.getBlockType().id().equals("minecraft:air");
                 BlockVector3 worldPos = pastePos.add(c.subtract(origin));
                 
-                if (!isAir || !ignoreAir) {
+                if (isAir && ignoreAir) { // usually we just skip, unless removing a removeClipboard
+                	if (removeClipboard != null && !removeClipboard.getBlock(c).getBlockType().id().equals("minecraft:air")) {
+						try {
+							edit.setBlock(worldPos, BlockTypes.AIR.getDefaultState());
+							processed++;
+						} catch (Exception e) {
+							if (commandOutput)
+	    	            		source.sendError(Text.literal("Error setting block at " + worldPos + ": " + e.getMessage()));
+						}
+					}
+                }
+                else {
                 	try {
 		                if (remove) {
 		                    edit.setBlock(worldPos, BlockTypes.AIR.getDefaultState());
 		                } else { // PLACE
 	                        edit.setBlock(worldPos, schemBlock);
 		                }
+		                processed++;
                 	} catch (Exception e) {
     	            	if (commandOutput)
     	            		source.sendError(Text.literal("Error setting block at " + worldPos + ": " + e.getMessage()));
     	            }
-                    processed++;
                 }
                 
                 if (!advance()) reportSuccess();
@@ -201,6 +224,10 @@ public class SchematicPlaceTask implements ISchematicTask {
 		if (!clipboardLoaded()) return null;
 		return clipboard;
 	}
+    
+    public CompletableFuture<Clipboard> getClipboardFuture() {
+    	return clipboardFuture;
+    }
     
     @Override
     public int hashCode() {

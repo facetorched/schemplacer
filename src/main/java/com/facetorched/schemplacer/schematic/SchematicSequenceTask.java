@@ -70,7 +70,11 @@ public class SchematicSequenceTask implements ISchematicTask {
 
 	@Override
 	public int tick(int batchSize) {
-		if (done || paused) return batchSize;
+		if (done) return batchSize;
+        if (CommandBlockUtil.isCommandBlockSource(source)) {
+			CommandBlockUtil.setCommandBlockSuccess(source, 0); // for some reason we have to do this every tick
+		}
+        if (paused) return batchSize;
 		if (currentTaskIndex >= tasks.length) {
 			done = true;
 			return batchSize;

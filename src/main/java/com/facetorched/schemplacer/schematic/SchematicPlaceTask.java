@@ -42,6 +42,7 @@ public class SchematicPlaceTask implements ISchematicTask {
     private BlockVector3 origin;
     private int x, y, z;
     private boolean done = false;
+    private boolean paused = false;
     private boolean commandOutput = true;
     
     public SchematicPlaceTask(
@@ -142,10 +143,10 @@ public class SchematicPlaceTask implements ISchematicTask {
     public boolean isDone() { return done; }
     
     @Override
-    public boolean togglePause() { throw new UnsupportedOperationException("Not supported"); }
+    public boolean togglePause() { return paused = !paused; }
     
     @Override
-    public boolean isPaused() { throw new UnsupportedOperationException("Not supported"); }
+    public boolean isPaused() { return paused; }
     
     @Override
     public void stop() { done = true; }
@@ -156,6 +157,7 @@ public class SchematicPlaceTask implements ISchematicTask {
         if (CommandBlockUtil.isCommandBlockSource(source)) {
 			CommandBlockUtil.setCommandBlockSuccess(source, 0); // for some reason we have to do this every tick
 		}
+        if (paused) return batchSize;
         if (!clipboardLoaded()) return batchSize; // not loaded yet
         int processed = 0;
         Clipboard removeClipboard = null;

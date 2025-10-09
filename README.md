@@ -12,8 +12,18 @@ Sets blocks to air that are contained in the schematic. Uses the same loading an
 Sequentially places schematics using the same logic as `schemplace`.
 #### `schemstopanimate <filename> [<pos>] [<ticksPerFrame>] [<start>] [<end>] [<step>] [<loop>] [<removeWhenDone>] [<clearPrev>] [<ignoreAir>]`
 Stops any currently running animation that matches the given parameters.
+#### `schemwait <ticksToWait> [<waitId>]`
+Waits for the specified number of ticks
+#### `schemstopwait <ticksToWait> [<waitId>]`
+Stops any currently running wait task that matches the given parameters. Note: use the waitId to avoid overlap.
+#### `schemsequence <line>`
+Runs a sequence of comma-separated commands. Supported commands are 'schemplace', 'schemremove', 'schemanimate', 'schemstopanimate', 'schemwait', 'schemstopwait'.
+#### `schemstopsequence <line>`
+Stops any currently running sequence that matches the given parameters.
 #### `schemitem <line>` 
-Attaches a command to an item by adding the command to the item's Lore. The command is activated using right click. If relevant, shift right clicking will invert the command (place -> remove), (animate -> stopanimate) and vice-versa. Supported commands are `schemplace`, `schemremove`, `schemanimate`, `schemstopanimate`.
+Attaches a command (or list of comma-separated commands) to an item by adding the command to the item's Lore. The command(s) are activated using right click. If there is just a single command attached, shift right clicking will invert the command e.g. (place -> remove) or (start -> stop). If there is a sequence, shift right clicking will stop the sequence. Supported commands are the same as those supported by 'schemsequence'.
+#### `schemreloadcache`
+Reloads the schematic cache assuming [cacheSchematics](#cacheSchematics) is enabled.
 
 | Parameter            | Default Value   | Explanation |
 |----------------------|-----------------|-------------|
@@ -27,6 +37,8 @@ Attaches a command to an item by adding the command to the item's Lore. The comm
 | `[<removeWhenDone>]` | `true`          | If `true`, remove the last schematic frame when the animation completes. |
 | `[<clearPrev>]`      | `true`          | If `true`, automatically remove blocks from the previous frame before placing the next. |
 | `[<ignoreAir>]`      | `true`          | If `true`, skip air blocks when pasting (can increase performance). |
+
+- Note: running a command that is already running will instead pause or un-pause the task.
 
 ## Configuration
 

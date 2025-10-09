@@ -99,11 +99,44 @@ public class SchematicPlaceTask implements ISchematicTask {
     	this.clipboard = clipboardFuture.join();
         this.min = clipboard.getRegion().getMinimumPoint();
         this.max = clipboard.getRegion().getMaximumPoint();
+        if (removeClipboardFuture != null) {
+        	Clipboard removeClipboard = null;
+			try {
+				removeClipboard = removeClipboardFuture.join();
+			} catch (Exception e) {
+				if (commandOutput)
+            		source.sendError(Text.literal("Error loading remove schematic: " + e.getMessage()));
+				done = true;
+				return;
+			}
+			this.min = this.min.getMinimum(removeClipboard.getRegion().getMinimumPoint());
+			this.max = this.max.getMaximum(removeClipboard.getRegion().getMaximumPoint());
+		}
         this.origin = clipboard.getOrigin();
         this.x = min.x();
         this.y = min.y();
         this.z = min.z();
 	}
+    
+    @Override
+    public boolean enqueue(boolean unused) {
+		if (CommandBlockUtil.isCommandBlockSource(source)) {
+        	CommandBlockUtil.setCommandBlockSuccess(source, 0);
+        }
+		
+        boolean queueSuccess = SchemPlacerMod.enqueue(this);
+        if (!queueSuccess) {
+        	if (SchemPlacerMod.CONFIG.commandOutput)
+        		source.sendFeedback(() -> Text.literal("Already " + (remove ? "removing " : "placing ") + filename), true);
+			return false;
+		}
+        if (SchemPlacerMod.CONFIG.commandOutput)
+        	source.sendFeedback(() -> Text.literal((remove ? "Removing " : "Placing ") + filename), true);
+        if (CommandBlockUtil.isCommandBlockSource(source)) {
+        	return false;
+        }
+        return true;
+    }
     
     @Override
     public boolean isDone() { return done; }
@@ -127,12 +160,7 @@ public class SchematicPlaceTask implements ISchematicTask {
         int processed = 0;
         Clipboard removeClipboard = null;
         if (removeClipboardFuture != null) {
-			try {
-				removeClipboard = removeClipboardFuture.join();
-			} catch (Exception e) {
-				if (commandOutput)
-            		source.sendError(Text.literal("Error loading remove schematic: " + e.getMessage()));
-			}
+			removeClipboard = removeClipboardFuture.join();
 		}
         try (EditSession edit = WorldEdit.getInstance().newEditSession(weWorld)) {
         	edit.setSideEffectApplier(SideEffectSet.defaults()

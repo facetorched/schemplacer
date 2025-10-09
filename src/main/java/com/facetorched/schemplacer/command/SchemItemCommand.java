@@ -21,7 +21,6 @@ public final class SchemItemCommand {
 	public static final String COMMAND_NAME = "schemitem";
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher, CommandRegistryAccess access, CommandManager.RegistrationEnvironment env) {
         dispatcher.register(CommandManager.literal(COMMAND_NAME)
-            .requires(src -> src.hasPermissionLevel(0)) // players can run
             .then(CommandManager.argument("line", StringArgumentType.greedyString())
                 .executes(ctx -> {
                     ServerCommandSource source = ctx.getSource();
@@ -42,17 +41,20 @@ public final class SchemItemCommand {
                         source.sendError(Text.literal("Lore line cannot be empty."));
                         return 0;
                     }
-
-                    // Make it non-italic, white
-                    MutableText newLine = Text.literal(line).formatted(Formatting.WHITE).styled(s -> s.withItalic(false));
-                    List<Text> newLines = new ArrayList<>();
-                    newLines.add(newLine);
                     
-                    // Read existing lore (may be null) and append all existing lines after the new one
+                    List<Text> newLines = new ArrayList<>();
+                    // Read existing lore if present
                     LoreComponent existing = stack.get(DataComponentTypes.LORE);
                     if (existing != null && existing.lines() != null && !existing.lines().isEmpty()) {
                         newLines.addAll(existing.lines());
                     }
+                    // split line at \n or comma to allow multiple lines
+                    String[] splitLines = line.split("\\\\n|,");
+                    for (String l : splitLines) {
+						// non-italic, white
+						MutableText newLine = Text.literal(l.trim()).formatted(Formatting.WHITE).styled(s -> s.withItalic(false));
+						newLines.add(newLine); // add new line
+					}
 
                     stack.set(DataComponentTypes.LORE, new LoreComponent(newLines));
                     source.sendFeedback(() ->

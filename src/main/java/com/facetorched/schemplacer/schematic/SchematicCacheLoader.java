@@ -16,6 +16,12 @@ public class SchematicCacheLoader {
 
     @Subscribe
     public void onConfigLoad(PlatformReadyEvent event) {
+    	reloadCache(false);
+    }
+    
+    public static boolean reloadCache(boolean clearExisting) {
+    	if (!SchemPlacerMod.CONFIG.cacheSchematics) return false;
+    	if (clearExisting) SchematicService.SCHEMATIC_CACHE.clear();
     	File dir = SchemPlacerMod.CONFIG.getSchematicDir();
 		LOGGER.info("Schematic caching is enabled. Loading schematics from " + dir.getAbsolutePath());
 		if (dir.exists() && dir.isDirectory()) {
@@ -40,8 +46,10 @@ public class SchematicCacheLoader {
 					});
 				}
 			}
+			return true;
 		} else {
 			LOGGER.info("Schematic cache directory does not exist: " + dir.getAbsolutePath());
 		}
-    }
+		return false;
+	}
 }

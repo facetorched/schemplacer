@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import com.facetorched.schemplacer.SchemPlacerMod;
+import com.facetorched.schemplacer.util.CommandBlockUtil;
 import com.facetorched.schemplacer.util.FrameNumberIterator;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.fabric.FabricAdapter;
@@ -100,9 +101,7 @@ public class SchematicAnimationTask implements ISchematicTask {
 				ticksSinceLastFrame++;
 			if (currentTask.isDone()) {
 				if (nextTask == null) { // no more frames: end animation
-					done = true;
-					if (commandOutput)
-						source.sendFeedback(() -> Text.literal("Completed animation " + filenamePattern), true);
+					reportSuccess();
 					return batchSize;
 				} else if (nextTask.clipboardLoaded() && ticksSinceLastFrame >= ticksPerFrame) {
 					currentTask = nextTask;
@@ -114,6 +113,16 @@ public class SchematicAnimationTask implements ISchematicTask {
 			}
 		}
         return currentTask.tick(batchSize);
+    }
+    
+    private void reportSuccess() {
+    	done = true;
+        if (source == null) return;
+        if (CommandBlockUtil.isCommandBlockSource(source)) {
+            CommandBlockUtil.setCommandBlockSuccess(source, 1);
+        }
+        if (commandOutput)
+        	source.sendFeedback(() -> Text.literal("Completed animation " + filenamePattern), true);
     }
     
     private SchematicPlaceTask initNextTask() {
@@ -150,6 +159,47 @@ public class SchematicAnimationTask implements ISchematicTask {
                 true, // silent
                 removeClipboardFuture
         );
+    }
+    
+    @Override
+    public boolean enqueue(boolean stop) {
+    	if (CommandBlockUtil.isCommandBlockSource(source)) {
+			CommandBlockUtil.setCommandBlockSuccess(source, 0);
+		}
+    	if (stop) done = true; // This task is not meant to be ticked
+    	ISchematicTask task = this;
+		boolean isQueued = SchemPlacerMod.isTaskQueued(task);
+		if (isQueued) { // stop or toggle pause existing task
+			task = SchemPlacerMod.findTask(task);
+			if (task == null) { // should never happen
+				source.sendError(Text.literal("Unexpected Error: finding task in queue " + filenamePattern));
+			} else if (stop) {
+				if (SchemPlacerMod.CONFIG.commandOutput)
+					source.sendFeedback(() -> Text.literal("Stopping animation " + filenamePattern), true);
+				task.stop();
+				if (task.isPaused()) task.togglePause(); // unpause to allow stopping
+			} else {
+				boolean paused = task.togglePause();
+				if (SchemPlacerMod.CONFIG.commandOutput)
+					source.sendFeedback(() -> Text.literal((paused ? "Paused animation " : "Resumed animation ") + filenamePattern), true);
+			}
+		} else {
+			if (stop) {
+				source.sendFeedback(() -> Text.literal("No existing animation to stop " + filenamePattern), true);
+				return false;
+			}
+			boolean queueSuccess = SchemPlacerMod.enqueue(task);
+	        if (!queueSuccess) {
+	        	source.sendError(Text.literal("Unexpected Error queuing animation " + filenamePattern));
+				return false;
+			}
+	        if (SchemPlacerMod.CONFIG.commandOutput)
+				source.sendFeedback(() -> Text.literal("Playing animation " + filenamePattern), true);
+		}
+		if (CommandBlockUtil.isCommandBlockSource(source)) {
+			return false;
+		}
+		return true;
     }
     
     @Override

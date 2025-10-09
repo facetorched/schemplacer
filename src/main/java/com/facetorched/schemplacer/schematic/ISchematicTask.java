@@ -1,6 +1,8 @@
 package com.facetorched.schemplacer.schematic;
 
 public interface ISchematicTask {
+		/** Called to enqueue a new task. */
+	public boolean enqueue(boolean stop);
 		/** Called periodically to perform work. Return true if the task is complete. */
 	public int tick(int batchSize);
 		/** Called to pause or unpause the task. */

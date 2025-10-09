@@ -8,8 +8,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.facetorched.schemplacer.command.SchemPlaceCommand;
+import com.facetorched.schemplacer.command.SchemReloadCacheCommand;
 import com.facetorched.schemplacer.command.SchemRemoveCommand;
+import com.facetorched.schemplacer.command.SchemSequenceCommand;
 import com.facetorched.schemplacer.command.SchemStopAnimateCommand;
+import com.facetorched.schemplacer.command.SchemStopSequenceCommand;
+import com.facetorched.schemplacer.command.SchemStopWaitCommand;
+import com.facetorched.schemplacer.command.SchemWaitCommand;
 import com.facetorched.schemplacer.command.SchemAnimateCommand;
 import com.facetorched.schemplacer.command.SchemItemCommand;
 import com.facetorched.schemplacer.event.RightClickHandler;
@@ -40,6 +45,11 @@ public class SchemPlacerMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register(SchemItemCommand::register);
         CommandRegistrationCallback.EVENT.register(SchemAnimateCommand::register);
         CommandRegistrationCallback.EVENT.register(SchemStopAnimateCommand::register);
+        CommandRegistrationCallback.EVENT.register(SchemSequenceCommand::register);
+        CommandRegistrationCallback.EVENT.register(SchemStopSequenceCommand::register);
+        CommandRegistrationCallback.EVENT.register(SchemWaitCommand::register);
+        CommandRegistrationCallback.EVENT.register(SchemStopWaitCommand::register);
+        CommandRegistrationCallback.EVENT.register(SchemReloadCacheCommand::register);
         // Register right-click handler
         RightClickHandler.register();
         // Tick runner

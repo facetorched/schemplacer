@@ -13,6 +13,7 @@ import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.util.SideEffect;
 import com.sk89q.worldedit.util.SideEffectSet;
 import com.sk89q.worldedit.world.World;
+import com.sk89q.worldedit.world.block.BlockState;
 import com.sk89q.worldedit.world.block.BlockTypes;
 
 import net.minecraft.server.command.ServerCommandSource;
@@ -37,10 +38,10 @@ public class SchematicPlaceTask implements ISchematicTask {
     private final CompletableFuture<Clipboard> removeClipboardFuture;
     
     private Clipboard clipboard;
+    private Clipboard removeClipboard;
     private BlockVector3 min;
     private BlockVector3 max;
-    private BlockVector3 origin;
-    private int x, y, z;
+    private int x, y, z; // current relative placement position
     private boolean done = false;
     private boolean paused = false;
     private boolean commandOutput = true;
@@ -98,22 +99,24 @@ public class SchematicPlaceTask implements ISchematicTask {
     
     private void initClipboard() {
     	this.clipboard = clipboardFuture.join();
-        this.min = clipboard.getRegion().getMinimumPoint();
-        this.max = clipboard.getRegion().getMaximumPoint();
+    	BlockVector3 origin = clipboard.getOrigin();
+    	// bounds of region relative to origin
+        this.min = clipboard.getRegion().getMinimumPoint().subtract(origin);
+        this.max = clipboard.getRegion().getMaximumPoint().subtract(origin);
         if (removeClipboardFuture != null) {
-        	Clipboard removeClipboard = null;
 			try {
-				removeClipboard = removeClipboardFuture.join();
+				this.removeClipboard = removeClipboardFuture.join();
 			} catch (Exception e) {
 				if (commandOutput)
             		source.sendError(Text.literal("Error loading remove schematic: " + e.getMessage()));
 				done = true;
 				return;
 			}
-			this.min = this.min.getMinimum(removeClipboard.getRegion().getMinimumPoint());
-			this.max = this.max.getMaximum(removeClipboard.getRegion().getMaximumPoint());
+			// expand relative bounds to include removeClipboard
+			BlockVector3 removeOrigin = this.removeClipboard.getOrigin();
+			this.min = this.min.getMinimum(this.removeClipboard.getRegion().getMinimumPoint().subtract(removeOrigin));
+			this.max = this.max.getMaximum(this.removeClipboard.getRegion().getMaximumPoint().subtract(removeOrigin));
 		}
-        this.origin = clipboard.getOrigin();
         this.x = min.x();
         this.y = min.y();
         this.z = min.z();
@@ -159,31 +162,32 @@ public class SchematicPlaceTask implements ISchematicTask {
 		}
         if (paused) return batchSize;
         if (!clipboardLoaded()) return batchSize; // not loaded yet
+        if (removeClipboardFuture != null && removeClipboard == null) return batchSize; // This is an unlikely or maybe impossible race condition.
         int processed = 0;
-        Clipboard removeClipboard = null;
-        if (removeClipboardFuture != null) {
-			removeClipboard = removeClipboardFuture.join();
-		}
         try (EditSession edit = WorldEdit.getInstance().newEditSession(weWorld)) {
         	edit.setSideEffectApplier(SideEffectSet.defaults()
         			.with(SideEffect.LIGHTING, SideEffect.State.DELAYED)
         			.with(SideEffect.NEIGHBORS, SideEffect.State.OFF)
         			.with(SideEffect.UPDATE, SideEffect.State.OFF));
             while (!done && processed < batchSize) {
-                BlockVector3 c = BlockVector3.at(x, y, z);
-                var schemBlock = clipboard.getBlock(c);
+            	BlockVector3 relPos = BlockVector3.at(x, y, z);
+                BlockVector3 clipPos = clipboard.getOrigin().add(relPos); // origin is often the absolute position of the player who saved the schematic
+                BlockState schemBlock = clipboard.getBlock(clipPos);
                 boolean isAir = schemBlock.getBlockType().id().equals("minecraft:air");
-                BlockVector3 worldPos = pastePos.add(c.subtract(origin));
-                
-                if (isAir && ignoreAir) { // usually we just skip, unless removing a removeClipboard
-                	if (removeClipboard != null && !removeClipboard.getBlock(c).getBlockType().id().equals("minecraft:air")) {
-						try {
-							edit.setBlock(worldPos, BlockTypes.AIR.getDefaultState());
-							processed++;
-						} catch (Exception e) {
-							if (commandOutput)
-	    	            		source.sendError(Text.literal("Error setting block at " + worldPos + ": " + e.getMessage()));
-						}
+                BlockVector3 worldPos = pastePos.add(relPos);
+                if (isAir && ignoreAir) {
+                	// usually we just skip if ignoring air, unless removing a removeClipboard
+                	if (removeClipboard != null) {
+                		BlockVector3 removeClipPos = removeClipboard.getOrigin().add(relPos);
+                		if (!removeClipboard.getBlock(removeClipPos).getBlockType().id().equals("minecraft:air")) {
+							try {
+								edit.setBlock(worldPos, BlockTypes.AIR.getDefaultState());
+								processed++;
+							} catch (Exception e) {
+								if (commandOutput)
+		    	            		source.sendError(Text.literal("Error setting block at " + worldPos + ": " + e.getMessage()));
+							}
+                		}
 					}
                 }
                 else {

@@ -7,9 +7,9 @@ An addon for [WorldEdit](https://enginehub.org/worldedit) that streamlines placi
 #### `schemplace <filename> [<pos>] [<ignoreAir>]` 
 loads and places a schematic. Loading is done asynchronously and placement happens over multiple ticks if necessary (see [batchSize](#batchSize)).
 #### `schemremove <filename> [<pos>] [<ignoreAir>]` 
-Sets blocks to air that are contained in the schematic. Uses the same loading and placement logic as `placeschem`.
+Sets blocks to air that are contained in the schematic. Uses the same loading and placement logic as 'schemplace'.
 #### `schemanimate <filename> [<pos>] [<ticksPerFrame>] [<start>] [<end>] [<step>] [<loop>] [<removeWhenDone>] [<clearPrev>] [<ignoreAir>]`
-Sequentially places schematics using the same logic as `schemplace`.
+Sequentially places schematics using the same logic as 'schemplace'.
 #### `schemstopanimate <filename> [<pos>] [<ticksPerFrame>] [<start>] [<end>] [<step>] [<loop>] [<removeWhenDone>] [<clearPrev>] [<ignoreAir>]`
 Stops any currently running animation that matches the given parameters.
 #### `schemwait <ticksToWait> [<waitId>]`

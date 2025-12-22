@@ -28,7 +28,9 @@ public class FrameNumberIterator {
         if (step > 0) return current <= end;
         else return current >= end;
     }
-
+    
+    /** Returns the current value and advances to the next. 
+	 * If looping is enabled and the end is reached, resets to start. */
     public int next() {
         if (!hasNext()) throw new NoSuchElementException();
         int val = current;

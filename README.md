@@ -29,7 +29,7 @@ Reloads the schematic cache assuming [cacheSchematics](#cacheSchematics) is enab
 |----------------------|-----------------|-------------|
 | `<filename>`         | *required*      | Path or pattern for the schematic file(s). Supports `%d` formatting for frame numbers. |
 | `[<pos>]`            | Player position | World coordinates where the schematic is pasted. Accepts absolute or relative (`~ ~ ~`) values. |
-| `[<ticksPerFrame>]`  | `0`             | Number of ticks between the start of each frame. If exceeded, the next frame will start as soon as possible. |
+| `[<ticksPerFrame>]`  | `0`             | Number of ticks between the start of each frame. If exceeded, the next frame will start as soon as possible. `-1` = wait until the schematic file exists. |
 | `[<start>]`          | `0`             | First frame number in the sequence. |
 | `[<end>]`            | `-1`            | Last frame number in the sequence (inclusive). `-1` = keep going until the schematic does not exist. |
 | `[<step>]`           | `1`             | How much to increment (or decrement if negative) the frame number each step. |

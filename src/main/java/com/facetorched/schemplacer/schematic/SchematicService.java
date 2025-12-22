@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import com.facetorched.schemplacer.SchemPlacerMod;
+import com.facetorched.schemplacer.util.SchemNotFoundException;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.WorldEditException;
 import com.sk89q.worldedit.extension.platform.Actor;
@@ -32,30 +33,33 @@ public class SchematicService {
     	if (SchemPlacerMod.CONFIG.cacheSchematics) {
     		if (SCHEMATIC_CACHE.containsKey(filename)) {
     			return SCHEMATIC_CACHE.get(filename);
-			} else {
-				CompletableFuture<Clipboard> future = loadClipboardInternal(source, filename);
-				SCHEMATIC_CACHE.put(filename, future);
-				return future;
     		}
     	}
-    	return loadClipboardInternal(source, filename);
-    }
-    
-    /** Internal method to load a schematic file asynchronously. */
-    private static CompletableFuture<Clipboard> loadClipboardInternal(ServerCommandSource source, String filename) {
-        return CompletableFuture.supplyAsync(() -> {
-            File file = getSchematicFile(filename); // validate file exists
+    	File file;
+    	try {
+    		file = getSchematicFile(filename); // errors if not found
+    	}
+    	catch (SchemNotFoundException e) {
+			CompletableFuture<Clipboard> failedFuture = new CompletableFuture<>();
+			failedFuture.completeExceptionally(e);
+			return failedFuture; // completed and not added to cache
+		}
+		CompletableFuture<Clipboard> future = CompletableFuture.supplyAsync(() -> {
 			ClipboardFormat fmt = ClipboardFormats.findByFile(file);
 	        if (fmt == null) throw new IllegalArgumentException("Unsupported format for: " + file.getName());
 	        try (ClipboardReader reader = fmt.getReader(new FileInputStream(file))) {
 	        	return reader.read();
 	        } catch (IOException ioe) {
-	        	throw new RuntimeException("Error loading schematic: " + ioe.getMessage(), ioe);
+	        	throw new RuntimeException("Error reading schematic: " + ioe.getMessage(), ioe);
 	        }
 		});
+		if (SchemPlacerMod.CONFIG.cacheSchematics) {
+			SCHEMATIC_CACHE.put(filename, future);
+    	}
+    	return future;
     }
     
-    public static File getSchematicFile(String filename) throws IllegalArgumentException {
+    public static File getSchematicFile(String filename) {
     	File dir = SchemPlacerMod.CONFIG.getSchematicDir();
         Actor actor = null; // no actor needed if opening file.
         File file;
@@ -66,7 +70,7 @@ public class SchematicService {
         } catch (FilenameException fe) {
             throw new IllegalArgumentException("Invalid path: " + fe.getMessage());
         }
-        if (!file.exists()) throw new IllegalArgumentException("File not found: " + file.getAbsolutePath());
+        if (!file.exists()) throw new SchemNotFoundException("Schematic not found: " + file.getAbsolutePath());
         return file;
     }
     

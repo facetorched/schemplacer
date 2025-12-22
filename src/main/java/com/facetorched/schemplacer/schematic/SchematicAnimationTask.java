@@ -50,7 +50,7 @@ public class SchematicAnimationTask implements ISchematicTask {
         this.source = source;
         this.filenamePattern = filenamePattern;
         this.pastePos = pastePos;
-        this.ticksPerFrame = ticksPerFrame != null ? Math.max(0, ticksPerFrame) : 0;
+        this.ticksPerFrame = ticksPerFrame != null ? ticksPerFrame : 0;
         this.frameIter = new FrameNumberIterator(start, end, step, loop); // defaults: start=0, end=null, step=1, loop=false
         this.removeWhenDone = removeWhenDone != null ? removeWhenDone : true;
         this.clearPrevFrame = clearPrevFrame != null ? clearPrevFrame : true;
@@ -84,14 +84,21 @@ public class SchematicAnimationTask implements ISchematicTask {
 			nextTask = initNextTask();
 			ticksSinceLastFrame = 0;
 		} else if (currentTask.clipboardErrored()) { // current task only has error if first frame failed to load
-			Exception ex = currentTask.getClipboardError();
+			if (currentTask.clipboardSchemNotFound() && ticksPerFrame < 0) { // wait for schematic to appear in the folder.
+				currentTask.loadClipboard(); // try reloading
+				return batchSize; 
+			}
+			Throwable ex = currentTask.getClipboardError();
 			if (commandOutput)
 				source.sendError(Text.literal("Error loading first frame of animation: " + (ex != null ? ex.getMessage() : "unknown error")));
 			done = true;
 		}
         else { // animation in progress
-        	if (nextTask != null && nextTask.clipboardErrored()) {
-				if (frameIter.end == null) { // End was not specified: lack of file means end.
+        	if (nextTask != null && nextTask.clipboardSchemNotFound()) {
+        		if (ticksPerFrame < 0) { // wait for schematic to appear in the folder.
+        			nextTask.loadClipboard(null, currentTask.getClipboardFuture()); // try reloading
+        		}
+        		else if (frameIter.end == null) { // End was not specified: lack of file means end.
             		if (frameIter.loop) {
             			frameIter.reset();
             		}
@@ -218,6 +225,10 @@ public class SchematicAnimationTask implements ISchematicTask {
     
     @Override
     public void stop() {
+    	if (currentTask == null || !currentTask.clipboardLoaded()) {
+    		done = true;
+    		return;
+    	}
 		frameIter.stop();
 		nextTask = initNextTask();
 	}

@@ -5,6 +5,7 @@ import java.util.concurrent.CompletableFuture;
 
 import com.facetorched.schemplacer.SchemPlacerMod;
 import com.facetorched.schemplacer.util.CommandBlockUtil;
+import com.facetorched.schemplacer.util.SchemNotFoundException;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extent.clipboard.Clipboard;
@@ -34,8 +35,8 @@ public class SchematicPlaceTask implements ISchematicTask {
     private final boolean ignoreAir;
     
     private final World weWorld;
-    private final CompletableFuture<Clipboard> clipboardFuture;
-    private final CompletableFuture<Clipboard> removeClipboardFuture;
+    private CompletableFuture<Clipboard> clipboardFuture;
+    private CompletableFuture<Clipboard> removeClipboardFuture;
     
     private Clipboard clipboard;
     private Clipboard removeClipboard;
@@ -62,20 +63,9 @@ public class SchematicPlaceTask implements ISchematicTask {
 	    this.remove = remove == null ? false : remove;
 	    if (silent) this.commandOutput = false;
 	    else this.commandOutput = SchemPlacerMod.CONFIG.commandOutput && source != null;
-	    this.removeClipboardFuture = removeClipboardFuture;
 	    
         this.weWorld = FabricAdapter.adapt(source.getWorld());
-    	this.clipboardFuture = clipboardFuture == null ? SchematicService.loadClipboardSafe(source, filename) : clipboardFuture;
-    	this.clipboardFuture.whenComplete((cb, ex) -> {
-    		if (cb != null && ex == null) {
-    			initClipboard();
-    		}
-    		else {
-				if (commandOutput)
-					source.sendError(Text.literal("Error loading schematic: " + ex.getMessage()));
-				done = true;
-			}
-		});
+        loadClipboard(clipboardFuture, removeClipboardFuture);
     }
     
     public SchematicPlaceTask(
@@ -96,6 +86,26 @@ public class SchematicPlaceTask implements ISchematicTask {
 	    Boolean remove) {
     	this(source, filename, null, pastePos, ignoreAir, remove);
     }
+    
+    public void loadClipboard() {
+    	loadClipboard(null, null);
+    }
+    
+    public void loadClipboard(CompletableFuture<Clipboard> clipboardFuture, CompletableFuture<Clipboard> removeClipboardFuture) {
+    	done = false;
+    	this.removeClipboardFuture = removeClipboardFuture;
+    	this.clipboardFuture = clipboardFuture == null ? SchematicService.loadClipboardSafe(source, filename) : clipboardFuture;
+    	this.clipboardFuture.whenComplete((cb, ex) -> {
+    		if (cb != null && ex == null) {
+    			initClipboard();
+    		}
+    		else {
+				if (commandOutput)
+					source.sendError(Text.literal("Error loading schematic: " + ex.getMessage()));
+				done = true;
+			}
+		});
+	}
     
     private void initClipboard() {
     	this.clipboard = clipboardFuture.join();
@@ -244,12 +254,16 @@ public class SchematicPlaceTask implements ISchematicTask {
     	return clipboardFuture.isCompletedExceptionally();
     }
     
-    public Exception getClipboardError() {
+    public boolean clipboardSchemNotFound() {
+		return getClipboardError() instanceof SchemNotFoundException;
+    }
+    
+    public Throwable getClipboardError() {
 		if (!clipboardErrored()) return null;
 		try {
 			clipboardFuture.join();
 		} catch (Exception e) {
-			return e;
+			return e.getCause();
 		}
 		return null;
 	}

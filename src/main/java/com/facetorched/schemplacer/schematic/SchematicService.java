@@ -3,8 +3,6 @@ package com.facetorched.schemplacer.schematic;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import com.facetorched.schemplacer.SchemPlacerMod;
@@ -26,13 +24,13 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.Text;
 
 public class SchematicService {
-	public static final Map<String, CompletableFuture<Clipboard>> SCHEMATIC_CACHE = new HashMap<String, CompletableFuture<Clipboard>>();
-    
     /** Load a schematic file, using cache if enabled. */
     public static CompletableFuture<Clipboard> loadClipboardSafe(ServerCommandSource source, String filename) {
+    	String filestem = getFilestem(filename);
     	if (SchemPlacerMod.CONFIG.cacheSchematics) {
-    		if (SCHEMATIC_CACHE.containsKey(filename)) {
-    			return SCHEMATIC_CACHE.get(filename);
+    		if (SchematicCache.containsKey(filestem)) {
+    			SchemPlacerMod.LOGGER.info("Loaded schematic from cache: " + filename);
+    			return SchematicCache.getFuture(filestem);
     		}
     	}
     	File file;
@@ -54,7 +52,19 @@ public class SchematicService {
 	        }
 		});
 		if (SchemPlacerMod.CONFIG.cacheSchematics) {
-			SCHEMATIC_CACHE.put(filename, future);
+			future.whenComplete((cb, ex) -> {
+				if (ex != null) {
+					if (ex.getCause() instanceof OutOfMemoryError) {
+						SchemPlacerMod.LOGGER.error("Out of memory loading schematic " + filename + ". Consider disabling caching or increasing memory allocation.");
+						System.gc(); // suggest garbage collection
+					}
+					SchemPlacerMod.LOGGER.warn("Failed to load and cache schematic " + filename, ex);
+				} else {
+					SchematicCache.put(filestem, cb);
+					SchemPlacerMod.LOGGER.info("Cached schematic: " + filename);
+				}
+			});
+			
     	}
     	return future;
     }
@@ -72,6 +82,13 @@ public class SchematicService {
         }
         if (!file.exists()) throw new SchemNotFoundException("Schematic not found: " + file.getAbsolutePath());
         return file;
+    }
+    
+    public static String getFilestem(String filename) {
+    	int dotIdx = filename.lastIndexOf('.');
+		if (dotIdx <= 0) return filename;
+		String name = filename.substring(0, dotIdx);
+		return name;
     }
     
     public static boolean schematicExists(String filename) {

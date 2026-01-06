@@ -9,8 +9,10 @@ public interface ISchematicTask {
 	public boolean togglePause();
 		/** Called to check if the task is paused. */
 	public boolean isPaused();
-		/** Called to pause the task. */
+		/** Called to stop the task. */
 	public void stop();
 		/** Called to check if the task is complete. */
 	public boolean isDone();
+		/** Get a description of the task for listing. */
+	public SchematicTaskDescription getDescription();
 }

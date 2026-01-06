@@ -1,9 +1,12 @@
 package com.facetorched.schemplacer.schematic;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import com.facetorched.schemplacer.SchemPlacerMod;
 import com.facetorched.schemplacer.util.SchemNotFoundException;
@@ -99,6 +102,27 @@ public class SchematicService {
 			return false;
 		}
 	}
+    
+    public static CompletableFuture<Clipboard> loadClipboardStream(InputStream inputStream) {
+        return CompletableFuture.supplyAsync(() -> {
+            byte[] data;
+            try (InputStream in = inputStream) {
+                data = in.readAllBytes();
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to read streamed schematic byte data", e);
+            }
+            Supplier<InputStream> streamSupplier = () -> new ByteArrayInputStream(data);
+            ClipboardFormat format = ClipboardFormats.findByInputStream(streamSupplier);
+            if (format == null) {
+                throw new RuntimeException("Unknown schematic format");
+            }
+            try (ClipboardReader reader = format.getReader(streamSupplier.get())) {
+                return reader.read();
+            } catch (IOException ioe) {
+            	throw new RuntimeException("Error reading schematic: " + ioe.getMessage(), ioe);
+            }
+        });
+    }
     
     /** Create an efficient difference clipboard between two schematics. */
     public static Clipboard diffClipboard(

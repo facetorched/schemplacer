@@ -5,7 +5,7 @@ import java.util.Objects;
 
 public class FrameNumberIterator {
     public final int start;
-    public final Integer end; // nullable
+    public final int end; // if < 0 then infinite
     public final int step;
     public final boolean loop;
 
@@ -14,7 +14,7 @@ public class FrameNumberIterator {
 
     public FrameNumberIterator(Integer start, Integer end, Integer step, Boolean loop) {
         this.start = (start != null) ? start : 0;
-        this.end = (end != null && end < 0) ? null : end; // may be null
+        this.end = (end != null) ? end : -1;
         this.step = (step != null) ? step : 1;
         this.loop = (loop != null) ? loop : false;
         this.current = this.start;
@@ -22,7 +22,7 @@ public class FrameNumberIterator {
 
     public boolean hasNext() {
     	if (stopped) return false;
-        if (end == null) return true; // infinite
+        if (end < 0) return true; // infinite
         if (loop) return true; // will reset
         // inclusive end
         if (step > 0) return current <= end;
@@ -35,7 +35,7 @@ public class FrameNumberIterator {
         if (!hasNext()) throw new NoSuchElementException();
         int val = current;
         current += step;
-        if (loop && end != null) {
+        if (loop && end >= 0) {
             if ((step > 0 && val >= end) || (step < 0 && val <= end)) {
                 reset();
             }
@@ -66,8 +66,13 @@ public class FrameNumberIterator {
 		if (this == obj) return true;
 		if (!(obj instanceof FrameNumberIterator other)) return false;
 		return start == other.start
-			&& Objects.equals(end, other.end)
+			&& end == other.end
 			&& step == other.step
 			&& loop == other.loop;
 	}
+    
+    @Override
+    public String toString() {
+    	return "FrameNumberIterator[start=" + start + ", end=" + end + ", step=" + step + ", loop=" + loop + "]";
+    }
 }

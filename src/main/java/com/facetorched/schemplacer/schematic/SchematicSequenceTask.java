@@ -6,12 +6,9 @@ import java.util.Locale;
 import com.facetorched.schemplacer.SchemPlacerMod;
 import com.facetorched.schemplacer.command.SchemAnimateCommand;
 import com.facetorched.schemplacer.command.SchemPlaceCommand;
-import com.facetorched.schemplacer.command.SchemRemoveCommand;
-import com.facetorched.schemplacer.command.SchemStopAnimateCommand;
-import com.facetorched.schemplacer.command.SchemStopWaitCommand;
+import com.facetorched.schemplacer.command.SchemStreamCommand;
 import com.facetorched.schemplacer.command.SchemWaitCommand;
 import com.facetorched.schemplacer.util.CommandBlockUtil;
-import com.facetorched.schemplacer.util.UnknownSchemCommandException;
 import com.sk89q.worldedit.math.BlockVector3;
 
 import net.minecraft.server.command.ServerCommandSource;
@@ -27,11 +24,11 @@ public class SchematicSequenceTask implements ISchematicTask {
 	private boolean stopped = false;
 	private boolean commandOutput = true;
 	
-	public SchematicSequenceTask(ServerCommandSource source, String taskString) throws UnknownSchemCommandException {
+	public SchematicSequenceTask(ServerCommandSource source, String taskString) {
 		this(source, taskString.split("\\\\n|,"));
 	}
 	
-	public SchematicSequenceTask(ServerCommandSource source, String [] taskStrings) throws UnknownSchemCommandException {
+	public SchematicSequenceTask(ServerCommandSource source, String [] taskStrings) {
 		this.source = source;
 		this.commandOutput = SchemPlacerMod.CONFIG.commandOutput && source != null;
 		if (taskStrings == null || taskStrings.length == 0) {
@@ -39,6 +36,7 @@ public class SchematicSequenceTask implements ISchematicTask {
 		}
 		this.tasks = new ISchematicTask[taskStrings.length];
 		this.isStop = new boolean[taskStrings.length]; // initialized to false
+		boolean containsStream = false;
 		for (int i = 0; i < taskStrings.length; i++) {
 			String line = taskStrings[i].trim();
 			if (line.isEmpty()) throw new IllegalArgumentException("Empty command in task list");
@@ -49,20 +47,26 @@ public class SchematicSequenceTask implements ISchematicTask {
 	        
 	        ISchematicTask task = null;
 	        if (cmd.equals(SchemPlaceCommand.COMMAND_NAME)) {
-	        	task = parsePlaceTask(false, toks);
-	        } else if (cmd.equals(SchemRemoveCommand.COMMAND_NAME)) {
-	        	task = parsePlaceTask(true, toks);
-	        } else if (cmd.equals(SchemAnimateCommand.COMMAND_NAME) || cmd.equals(SchemStopAnimateCommand.COMMAND_NAME)) {
+	        	boolean remove = parseEndFlag("remove", toks, 2);
+	        	task = parsePlaceTask(remove, toks);
+	        } else if (cmd.equals(SchemAnimateCommand.COMMAND_NAME)) {
 	        	task = parseAnimationTask(toks);
-	        	isStop[i] = cmd.equals(SchemStopAnimateCommand.COMMAND_NAME);
-	        } else if (cmd.equals(SchemWaitCommand.COMMAND_NAME) || cmd.equals(SchemStopWaitCommand.COMMAND_NAME)) {
+	        	isStop[i] = parseEndFlag("stop", toks, 2);
+	        } else if (cmd.equals(SchemWaitCommand.COMMAND_NAME)) {
 	        	task = parseWaitTask(toks);
-	        	isStop[i] = cmd.equals(SchemStopWaitCommand.COMMAND_NAME);
+	        	isStop[i] = parseEndFlag("stop", toks, 2);
+	        } else if (cmd.equals(SchemStreamCommand.COMMAND_NAME)) {
+	        	task = parseStreamTask(toks);
+	        	isStop[i] = parseEndFlag("stop", toks, 2);
+	        	containsStream = true;
 			} else {
-				throw new UnknownSchemCommandException("Unknown command in task list: " + cmd);
+				throw new IllegalArgumentException("Unknown command in task list: " + cmd);
 			}
 	        if (task == null) {
 	        	throw new IllegalArgumentException("Failed to parse command in task list: " + line);
+	        }
+	        if (containsStream && i > 0) {
+	        	throw new IllegalArgumentException("SchemStream command must be the only command in a sequence");
 	        }
 	        this.tasks[i] = task;
 		}
@@ -129,9 +133,9 @@ public class SchematicSequenceTask implements ISchematicTask {
 		}
     	if (stop) done = true; // This task is not meant to be ticked
     	ISchematicTask task = this;
-		boolean isQueued = SchemPlacerMod.isTaskQueued(task);
+		boolean isQueued = SchematicTaskQueue.isTaskQueued(task);
 		if (isQueued) { // stop or toggle pause existing task
-			task = SchemPlacerMod.findTask(task);
+			task = SchematicTaskQueue.findTask(task);
 			if (task == null) { // should never happen
 				source.sendError(Text.literal("Unexpected Error: finding sequence in queue"));
 			} else if (stop) {
@@ -149,9 +153,9 @@ public class SchematicSequenceTask implements ISchematicTask {
 				source.sendFeedback(() -> Text.literal("No existing sequence to stop"), true);
 				return false;
 			}
-			boolean queueSuccess = SchemPlacerMod.enqueue(task);
+			boolean queueSuccess = SchematicTaskQueue.enqueue(task);
 	        if (!queueSuccess) {
-	        	source.sendError(Text.literal("Unexpected Error queuing sequence"));
+	        	source.sendError(Text.literal("Error queuing sequence (task already exists)"));
 				return false;
 			}
 	        if (SchemPlacerMod.CONFIG.commandOutput)
@@ -191,6 +195,15 @@ public class SchematicSequenceTask implements ISchematicTask {
 		return done;
 	}
 	
+	public boolean parseEndFlag(String flag, String[] toks, int minIndex) {
+		if (toks.length > minIndex) {
+			if (toks[toks.length - 1].toLowerCase(Locale.ROOT).equals(flag)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	private ISchematicTask parsePlaceTask(boolean remove, String [] toks) {
     	String filename = getFilenameArg(toks, 1);
     	if (filename == null) return null;
@@ -226,6 +239,19 @@ public class SchematicSequenceTask implements ISchematicTask {
 		if (ticksToWait == null) return null;
 		Integer waitId = getIntegerArg(toks, 2);
 		return new SchematicWaitTask(source, ticksToWait, waitId);
+	}
+	
+	private ISchematicTask parseStreamTask(String[] toks) {
+		Integer port = getIntegerArg(toks, 1);
+		if (port == null) return null;
+		BlockVector3 pos = getPastePositionArg(source, toks, 2);
+		if (pos == null) return null;
+		Boolean skipLaggingFrames = getBooleanArg(toks, 5);
+		Boolean removeWhenDone = getBooleanArg(toks, 6);
+		Boolean clearPrevFrame = getBooleanArg(toks, 7);
+		Boolean ignoreAir = getBooleanArg(toks, 8);
+		return new SchematicStreamTask(source, port, pos,
+				skipLaggingFrames, removeWhenDone, clearPrevFrame, ignoreAir);
 	}
     
     private static String getFilenameArg(String[] toks, int index) {
@@ -298,4 +324,17 @@ public class SchematicSequenceTask implements ISchematicTask {
     	if (!(obj instanceof SchematicSequenceTask other)) return false;
     	return List.of(tasks).equals(List.of(other.tasks));
     }
+    
+    @Override
+    public SchematicTaskDescription getDescription() {
+    	String[] taskKeys = new String[tasks.length];
+    	for (int i = 0; i < tasks.length; i++) {
+			taskKeys[i] = "task" + i;
+		}
+		return new SchematicTaskDescription(
+			"SchematicSequenceTask",
+			taskKeys,
+			List.of(tasks).toArray());
+    }
 }
+			

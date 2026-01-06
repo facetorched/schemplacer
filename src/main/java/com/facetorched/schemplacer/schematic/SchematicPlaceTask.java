@@ -138,7 +138,7 @@ public class SchematicPlaceTask implements ISchematicTask {
         	CommandBlockUtil.setCommandBlockSuccess(source, 0);
         }
 		
-        boolean queueSuccess = SchemPlacerMod.enqueue(this);
+        boolean queueSuccess = SchematicTaskQueue.enqueue(this);
         if (!queueSuccess) {
         	if (SchemPlacerMod.CONFIG.commandOutput)
         		source.sendFeedback(() -> Text.literal("Already " + (remove ? "removing " : "placing ") + filename), true);
@@ -292,4 +292,13 @@ public class SchematicPlaceTask implements ISchematicTask {
             && remove == other.remove
             && ignoreAir == other.ignoreAir;
     }
+    
+    @Override
+    public SchematicTaskDescription getDescription() {
+		return new SchematicTaskDescription(
+			"SchematicPlaceTask",
+			new String[] {"filename", "pastePos", "remove", "ignoreAir"},
+			new Object[] {filename, pastePos, remove, ignoreAir}
+		);
+	}
 }

@@ -2,11 +2,9 @@ package com.facetorched.schemplacer.schematic;
 
 import java.io.File;
 import java.util.HashSet;
-import java.util.concurrent.CompletableFuture;
 
 import com.facetorched.schemplacer.SchemPlacerMod;
 import com.sk89q.worldedit.event.platform.PlatformReadyEvent;
-import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.util.eventbus.Subscribe;
 
 public class SchematicCacheLoader {

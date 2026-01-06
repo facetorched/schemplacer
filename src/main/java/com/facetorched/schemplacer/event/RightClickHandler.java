@@ -2,7 +2,6 @@ package com.facetorched.schemplacer.event;
 
 import com.facetorched.schemplacer.SchemPlacerMod;
 import com.facetorched.schemplacer.schematic.SchematicSequenceTask;
-import com.facetorched.schemplacer.util.UnknownSchemCommandException;
 
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.component.DataComponentTypes;
@@ -25,10 +24,6 @@ public class RightClickHandler {
             try {
             	 task = new SchematicSequenceTask(sp.getCommandSource(), taskList);
             } catch (Exception e) {
-            	if (e instanceof UnknownSchemCommandException) {
-					// don't spam unknown command errors
-					return ActionResult.PASS;
-				}
 				if (SchemPlacerMod.CONFIG.commandOutput) {
 					String msg = e != null ? e.getMessage() : "Failed to parse command sequence";
 					sp.sendMessage(Text.literal(msg), false);

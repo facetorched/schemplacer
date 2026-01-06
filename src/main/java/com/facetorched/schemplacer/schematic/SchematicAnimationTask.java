@@ -60,7 +60,7 @@ public class SchematicAnimationTask implements ISchematicTask {
         this.commandOutput = SchemPlacerMod.CONFIG.commandOutput && source != null;
 
         if (!this.frameIter.hasNext()) {
-			if (SchemPlacerMod.CONFIG.commandOutput)
+			if (commandOutput)
 				source.sendError(Text.literal("No frames to play in animation."));
 			done = true;
 		}
@@ -89,8 +89,7 @@ public class SchematicAnimationTask implements ISchematicTask {
 				return batchSize; 
 			}
 			Throwable ex = currentTask.getClipboardError();
-			if (commandOutput)
-				source.sendError(Text.literal("Error loading first frame of animation: " + (ex != null ? ex.getMessage() : "unknown error")));
+			if (commandOutput) source.sendError(Text.literal("Error loading first frame of animation: " + (ex != null ? ex.getMessage() : "unknown error")));
 			done = true;
 		}
         else { // animation in progress
@@ -98,7 +97,7 @@ public class SchematicAnimationTask implements ISchematicTask {
         		if (ticksPerFrame < 0) { // wait for schematic to appear in the folder.
         			nextTask.loadClipboard(null, currentTask.getClipboardFuture()); // try reloading
         		}
-        		else if (frameIter.end == null) { // End was not specified: lack of file means end.
+        		else if (frameIter.end < 0) { // End not specified: lack of file means end.
             		if (frameIter.loop) {
             			frameIter.reset();
             		}
@@ -132,8 +131,7 @@ public class SchematicAnimationTask implements ISchematicTask {
         if (CommandBlockUtil.isCommandBlockSource(source)) {
             CommandBlockUtil.setCommandBlockSuccess(source, 1);
         }
-        if (commandOutput)
-        	source.sendFeedback(() -> Text.literal("Completed animation " + filenamePattern), true);
+        if (commandOutput) source.sendFeedback(() -> Text.literal("Completed animation " + filenamePattern), true);
     }
     
     private SchematicPlaceTask initNextTask() {
@@ -179,33 +177,30 @@ public class SchematicAnimationTask implements ISchematicTask {
 		}
     	if (stop) done = true; // This task is not meant to be ticked
     	ISchematicTask task = this;
-		boolean isQueued = SchemPlacerMod.isTaskQueued(task);
+		boolean isQueued = SchematicTaskQueue.isTaskQueued(task);
 		if (isQueued) { // stop or toggle pause existing task
-			task = SchemPlacerMod.findTask(task);
+			task = SchematicTaskQueue.findTask(task);
 			if (task == null) { // should never happen
-				source.sendError(Text.literal("Unexpected Error: finding task in queue " + filenamePattern));
+				if (commandOutput) source.sendError(Text.literal("Unexpected Error: finding task in queue " + filenamePattern));
 			} else if (stop) {
-				if (SchemPlacerMod.CONFIG.commandOutput)
-					source.sendFeedback(() -> Text.literal("Stopping animation " + filenamePattern), true);
+				if (commandOutput) source.sendFeedback(() -> Text.literal("Stopping animation " + filenamePattern), true);
 				task.stop();
 				if (task.isPaused()) task.togglePause(); // unpause to allow stopping
 			} else {
 				boolean paused = task.togglePause();
-				if (SchemPlacerMod.CONFIG.commandOutput)
-					source.sendFeedback(() -> Text.literal((paused ? "Paused animation " : "Resumed animation ") + filenamePattern), true);
+				if (commandOutput) source.sendFeedback(() -> Text.literal((paused ? "Paused animation " : "Resumed animation ") + filenamePattern), true);
 			}
 		} else {
 			if (stop) {
-				source.sendFeedback(() -> Text.literal("No existing animation to stop " + filenamePattern), true);
+				if (commandOutput) source.sendFeedback(() -> Text.literal("No existing animation to stop " + filenamePattern), true);
 				return false;
 			}
-			boolean queueSuccess = SchemPlacerMod.enqueue(task);
+			boolean queueSuccess = SchematicTaskQueue.enqueue(task);
 	        if (!queueSuccess) {
-	        	source.sendError(Text.literal("Unexpected Error queuing animation " + filenamePattern));
+	        	if (commandOutput) source.sendError(Text.literal("Error queuing animation (task already exists) " + filenamePattern));
 				return false;
 			}
-	        if (SchemPlacerMod.CONFIG.commandOutput)
-				source.sendFeedback(() -> Text.literal("Playing animation " + filenamePattern), true);
+	        if (commandOutput) source.sendFeedback(() -> Text.literal("Playing animation " + filenamePattern), true);
 		}
 		if (CommandBlockUtil.isCommandBlockSource(source)) {
 			return false;
@@ -264,4 +259,13 @@ public class SchematicAnimationTask implements ISchematicTask {
             && removeWhenDone == other.removeWhenDone
             && ignoreAir == other.ignoreAir;
     }
+    
+    @Override
+    public SchematicTaskDescription getDescription() {
+		return new SchematicTaskDescription(
+			"SchematicAnimationTask",
+			new String[] {"filenamePattern", "pastePos", "ticksPerFrame", "start", "end", "step", "loop", "clearPrevFrame", "removeWhenDone", "ignoreAir"},
+			new Object[] {filenamePattern, pastePos, ticksPerFrame, frameIter.start, frameIter.end, frameIter.step, frameIter.loop, clearPrevFrame, removeWhenDone, ignoreAir}
+		);
+	}
 }

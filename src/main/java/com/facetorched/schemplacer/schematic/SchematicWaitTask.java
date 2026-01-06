@@ -31,9 +31,9 @@ public class SchematicWaitTask implements ISchematicTask {
 		}
 		if (stop) done = true; // This task is not meant to be ticked
     	ISchematicTask task = this;
-		boolean isQueued = SchemPlacerMod.isTaskQueued(task);
+		boolean isQueued = SchematicTaskQueue.isTaskQueued(task);
 		if (isQueued) { // stop or toggle pause existing task
-			task = SchemPlacerMod.findTask(task);
+			task = SchematicTaskQueue.findTask(task);
 			if (task == null) { // should never happen
 				if (commandOutput)
 					source.sendError(Text.literal("Unexpected Error: finding wait task in queue"));
@@ -53,7 +53,7 @@ public class SchematicWaitTask implements ISchematicTask {
 					source.sendFeedback(() -> Text.literal("No existing wait to stop"), true);
 				return false;
 			}
-			boolean queueSuccess = SchemPlacerMod.enqueue(task);
+			boolean queueSuccess = SchematicTaskQueue.enqueue(task);
 	        if (!queueSuccess) {
 	        	if (commandOutput)
 	        		source.sendError(Text.literal("Unexpected Error queuing wait"));
@@ -122,5 +122,13 @@ public class SchematicWaitTask implements ISchematicTask {
 		if (!(obj instanceof SchematicWaitTask other)) return false;
 		return ticksToWait == other.ticksToWait && waitId == other.waitId;
 	}
-
+	
+	@Override
+    public SchematicTaskDescription getDescription() {
+		return new SchematicTaskDescription(
+			"SchematicWaitTask",
+			new String[] {"TicksToWait", "WaitId"},
+			new Object[] {ticksToWait, waitId}
+		);
+	}
 }
